@@ -13,43 +13,47 @@ namespace Superheroes.Tests
 {
     public class BattleTests
     {
-        [Fact]
-        public async Task Battle_Hero_Wins()
+        // TODO: these are not round numbers in base-2 floating point so this is a bit misleading
+        [InlineData("Potter", 8.2000001, "Voldemort", 8.2, "Potter")] // boundary testing
+        [InlineData("Potter", 8.1999999, "Voldemort", 8.2, "Voldemort")] // boundary testing
+        [InlineData("Potter", 8.2, "Voldemort", 8.2, "Potter")] // tied
+        [InlineData("Superman", 9, "Lex", 8, "Superman")] // prove names aren't hard-coded
+        [InlineData("Superman", 1, "Lex", 9, "Lex")]
+        [Theory]
+        public async Task HighestScoreWins(string heroName, double heroScore, string villainName, double villainScore, string expectedWinner)
         {
-            var charactersProvider = new FakeCharactersProvider();
-            var client = Setup(charactersProvider);
-            SetupDataFixture(charactersProvider, heroName: "Batman", heroScore: 8.3, villainName: "Joker", villainScore: 8.2);
+            // Arrange
+            var client = SetupBattle(heroName: heroName, heroScore: heroScore, villainName: villainName, villainScore: villainScore); // Why the redundant argument names you ask? Because they aren't redundant 👀 👉 https://timwise.co.uk/2023/04/18/always-add-argument-names/
 
-            var response = await RunBattle(client);
+            // Act
+            var winner = await RunBattle(client, heroName, villainName);
 
-            response.Value<string>("name").Should().Be("Batman");
+            // Assert
+            winner.Should().Be(expectedWinner);
         }
 
-        [Fact]
-        public async Task Battle_Hero_Wins_When_Matches()
+        private static HttpClient SetupBattle(string heroName, double heroScore, string villainName, double villainScore)
         {
-            var charactersProvider = new FakeCharactersProvider();
-            var client = Setup(charactersProvider);
-            SetupDataFixture(charactersProvider, heroName: "Batman", heroScore: 8.2, villainName: "Joker", villainScore: 8.2);
-
-            var response = await RunBattle(client);
-
-            response.Value<string>("name").Should().Be("Batman");
+            var charactersProvider = new FakeCharactersProvider()
+                .WithFakeResponse(BuildCharactersResponse(heroName: heroName,
+                    heroScore: heroScore,
+                    villainName: villainName,
+                    villainScore: villainScore));
+            return GetClient(charactersProvider);
         }
 
-        private static async Task<JObject> RunBattle(HttpClient client)
+        private static async Task<string> RunBattle(HttpClient client, string hero, string villain)
         {
-            var response = await client.GetAsync("battle?hero=Batman&villain=Joker");
+            var response = await client.GetAsync($"battle?hero={hero}&villain={villain}");
             response.StatusCode.Should().Be(HttpStatusCode.OK);
-
             var responseJson = await response.Content.ReadAsStringAsync();
-            var responseObject = JsonConvert.DeserializeObject<JObject>(responseJson);
-            return responseObject;
+            var winner = JsonConvert.DeserializeObject<JObject>(responseJson).Value<string>("name");
+            return winner;
         }
 
-        private static void SetupDataFixture(FakeCharactersProvider charactersProvider, string heroName, double heroScore, string villainName, double villainScore)
+        private static CharactersResponse BuildCharactersResponse(string heroName, double heroScore, string villainName, double villainScore)
         {
-            charactersProvider.FakeResponse(new CharactersResponse
+            return new CharactersResponse
             {
                 Items = new[]
                 {
@@ -57,26 +61,25 @@ namespace Superheroes.Tests
                     {
                         Name = heroName,
                         Score = heroScore,
-                        Type = "hero"
+                        Type = "hero",
                     },
                     new CharacterResponse
                     {
                         Name = villainName,
                         Score = villainScore,
-                        Type = "villain"
-                    }
-                }
-            });
+                        Type = "villain",
+                    },
+                },
+            };
         }
 
-        private static HttpClient Setup(FakeCharactersProvider charactersProvider)
+        private static HttpClient GetClient(ICharactersProvider charactersProvider)
         {
             var startup = new WebHostBuilder()
                 .UseStartup<Startup>()
-                .ConfigureServices(x => { x.AddSingleton<ICharactersProvider>(charactersProvider); });
+                .ConfigureServices(x => { x.AddSingleton(charactersProvider); });
             var testServer = new TestServer(startup);
-            var client = testServer.CreateClient();
-            return client;
+            return testServer.CreateClient();
         }
     }
 }
