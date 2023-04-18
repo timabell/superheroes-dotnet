@@ -32,13 +32,35 @@ namespace Superheroes.Tests
             winner.Should().Be(expectedWinner);
         }
 
-        private static HttpClient SetupBattle(string heroName, double heroScore, string villainName, double villainScore)
+        // show doesn't affect outcome when set to unrelated villain
+        [InlineData("Bart", "Nelson", 7, "Sideshow Bob", 6.9, "Bart")]
+        [InlineData("Bart", "Nelson", 7, "Sideshow Bob", 7, "Bart")]
+        [InlineData("Bart", "Nelson", 7, "Sideshow Bob", 7.1, "Sideshow Bob")]
+        // show effect when battling villain that is their weakness
+        [InlineData("Bart", "Nelson", 7, "Nelson", 5.9, "Bart")]
+        [InlineData("Bart", "Nelson", 7, "Nelson", 6, "Bart")]
+        [InlineData("Bart", "Nelson", 7, "Nelson", 6.1, "Nelson")]
+        [Theory]
+        public async Task WeaknessChangesWinner(string heroName, string heroWeakness, double heroScore, string villainName, double villainScore, string expectedWinner)
+        {
+            // Arrange
+            var client = SetupBattle(heroName: heroName, heroScore: heroScore, villainName: villainName, villainScore: villainScore, heroWeakness: heroWeakness);
+
+            // Act
+            var winner = await RunBattle(client, heroName, villainName);
+
+            // Assert
+            winner.Should().Be(expectedWinner);
+        }
+
+        private static HttpClient SetupBattle(string heroName, double heroScore, string villainName, double villainScore, string heroWeakness = null)
         {
             var charactersProvider = new FakeCharactersProvider()
                 .WithFakeResponse(BuildCharactersResponse(heroName: heroName,
                     heroScore: heroScore,
                     villainName: villainName,
-                    villainScore: villainScore));
+                    villainScore: villainScore,
+                    heroWeakness: heroWeakness));
             return GetClient(charactersProvider);
         }
 
@@ -51,7 +73,7 @@ namespace Superheroes.Tests
             return winner;
         }
 
-        private static CharactersResponse BuildCharactersResponse(string heroName, double heroScore, string villainName, double villainScore)
+        private static CharactersResponse BuildCharactersResponse(string heroName, double heroScore, string villainName, double villainScore, string heroWeakness)
         {
             return new CharactersResponse
             {
@@ -62,6 +84,7 @@ namespace Superheroes.Tests
                         Name = heroName,
                         Score = heroScore,
                         Type = "hero",
+                        Weakness = heroWeakness,
                     },
                     new CharacterResponse
                     {
