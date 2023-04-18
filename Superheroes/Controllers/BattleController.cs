@@ -23,12 +23,9 @@ namespace Superheroes.Controllers
             heroCharactar = availableCharacters.Items.SingleOrDefault(c => c.Name == hero);
             villainCharacter = availableCharacters.Items.SingleOrDefault(c => c.Name == villain);
 
-            if(heroCharactar.Score > villainCharacter.Score)
-            {
-                return Ok(heroCharactar);
-            }
+            var villainDefeated = heroCharactar.Score >= villainCharacter.Score;
 
-            return Ok(villainCharacter);
+            return Ok(villainDefeated ? heroCharactar : villainCharacter);
         }
     }
 }
